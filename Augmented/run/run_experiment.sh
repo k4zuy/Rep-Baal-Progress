@@ -7,7 +7,7 @@
 #SBATCH --mem=16000
 #SBATCH --mincpus=1
 #SBATCH --time=72:00:00                             
-#SBATCH --job-name=vgg_augmented_cifar10_orgsize
+#SBATCH --job-name=V2_uncertainties_vgg_augmented_cifar10_orgsize
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kevin.kirsten@mailbox.tu-dresden.de
 #SBATCH --output=../results/logs/output-%x.out
@@ -15,9 +15,9 @@
 module --force purge                          				
 module load modenv/hiera CUDA/11.7.0 GCCcore/11.3.0 Python/3.10.4
 
-source /run/lib.sh
+source lib.sh
 
-create_new_environment $SLURM_JOB_NAME
+create_or_reuse_environment $SLURM_JOB_NAME
 
 cd /home/keki996e/AL4ML/ACTIVE/OwnExperiments/Rep-Baal-Progress/Augmented
 

@@ -23,6 +23,7 @@ from baal.active import get_heuristic, ActiveLearningDataset
 from baal.active.active_loop import ActiveLearningLoop
 from baal.bayesian.dropout import patch_module
 from baal import ModelWrapper
+from baal.utils.metrics import Accuracy
 
 import aug_lib
 
@@ -101,18 +102,19 @@ def main():
         print("warning, the experiments would take ages to run on cpu")
 
     now = datetime.datetime.now()
-    dt_string = now.strftime("%d%m%Y%Hx%M")
-    with open("/results/csv/"+"metrics_cifarnet" + dt_string + ".csv", "w+", newline="") as out_file:
+    dt_string = now.strftime("%d_%m_%Y_%Hx%M")
+    with open("results/csv/metrics_cifarnet_" + dt_string + "_.csv", "w+", newline="") as out_file:
         csvwriter = csv.writer(out_file)
         csvwriter.writerow(
             (
                 "epoch",
-                "val_acc",
+                "test_acc",
                 "train_acc",
-                "active_set.labelled",
-                "active_set.n_augmented_images_labelled",
-                "active_set.n_unaugmented_images_labelled",
-                "len(active_set)",
+                "test_loss",
+                "train_loss",
+                "Next training size",
+                "amount original images labelled",
+                "amount augmented images labelled"
             )
         )
 
@@ -135,6 +137,7 @@ def main():
 
         # Wraps the model into a usable API.
         model = ModelWrapper(model, criterion, replicate_in_memory=False)
+        model.add_metric(name='accuracy',initializer=lambda : Accuracy())
 
         logs = {}
         logs["epoch"] = 0
@@ -146,6 +149,8 @@ def main():
             model.predict_on_dataset,
             heuristic,
             hyperparams.get("query_size", 1),
+            # save uncertainties into one or more files (not sure to be honest)
+            uncertainty_folder="results/uncertainties",
             batch_size=10,
             iterations=hyperparams["iterations"],
             use_cuda=use_cuda,
@@ -155,17 +160,12 @@ def main():
 
         layout = {
             "Loss/Accuracy": {
-                "Loss": [
-                    "Multiline", 
-                    ["loss/train", "loss/test", "loss/val"]],
-                "Accuracy": [
-                    "Multiline",
-                    ["accuracy/train", "accuracy/test", "accuracy/val"],
-                ],
-            },
+                "Loss": ["Multiline", ["loss/train", "loss/test"]],
+                "Accuracy": ["Multiline", ["accuracy/train", "accuracy/test"]],
+                },
         }
 
-        tensorboardwriter = SummaryWriter("/results/tensorboard/"+"tb-results" + dt_string + "/testrun")
+        tensorboardwriter = SummaryWriter("results/tensorboard/tb-results" + dt_string + "/testrun")
         tensorboardwriter.add_custom_scalars(layout)
 
         for epoch in tqdm(range(args.epoch)):
@@ -182,40 +182,63 @@ def main():
             # Validation!
             model.test_on_dataset(test_set, hyperparams["batch_size"], use_cuda)
             metrics = model.metrics
+            
+            # get origin amount of labelled augmented/unaugmented images
+            if(epoch == 0):
+                csvwriter.writerow(
+                    (
+                        -1,
+                        0,
+                        0,
+                        0,
+                        0,
+                        active_set.n_labelled,
+                        active_set.n_unaugmented_images_labelled,
+                        active_set.n_augmented_images_labelled
+                    )
+                )
+
             should_continue = active_loop.step()
             if not should_continue:
                 break
+            
+            test_acc = metrics["test_accuracy"].value
+            train_acc = metrics["train_accuracy"].value
+            test_loss = metrics["test_loss"].value
+            train_loss = metrics["train_loss"].value 
 
-            val_acc = metrics["test_acc"].value
+
             logs = {
                 "epoch": epoch,
-                "val_acc": val_acc,
-                "train_acc": metrics["train_accuracy"].value,
-                "labeled_data": active_set.labelled,
-                "n_augmented_images_labelled": active_set.n_augmented_images_labelled,
-                "n_unaugmented_images_labelled": active_set.n_unaugmented_images_labelled,
-                "Next Training set size": len(active_set),
+                "test_acc": test_acc,
+                "train_acc": train_acc,
+                "test_loss": test_loss,
+                "train_loss": train_loss,
+                "Next training size": active_set.n_labelled,
+                "amount original images labelled": active_set.n_augmented_images_labelled,
+                "amount augmented images labelled": active_set.n_unaugmented_images_labelled,
             }
             pprint(logs)
 
-            csvwriter.write(
+            csvwriter.writerow(
                 (
                     epoch,
-                    val_acc,
-                    metrics["train_accuracy"].value,
-                    active_set.labelled,
-                    active_set.n_augmented_images_labelled,
+                    test_acc,
+                    train_acc,
+                    test_loss,
+                    train_loss,
+                    active_set.n_labelled,
                     active_set.n_unaugmented_images_labelled,
-                    len(active_set),
+                    active_set.n_augmented_images_labelled
                 )
             )
 
-            tensorboardwriter.add_scalar("loss/train", metrics["train_loss"].value, epoch)
-            tensorboardwriter.add_scalar("loss/test", metrics["test_loss"].value, epoch)
-            tensorboardwriter.add_scalar("accuracy/train", metrics["train_accuracy"].value, epoch)
-            tensorboardwriter.add_scalar("accuracy/test", metrics["test_accuracy"].value, epoch)
-            tensorboardwriter.add_scalar("accuracy/train", metrics["validation_accuracy"].value, epoch)
-            tensorboardwriter.add_scalar("accuracy/test", metrics["validation_accuracy"].value, epoch)
+            tensorboardwriter.add_scalar("loss/train", train_loss, epoch)
+            tensorboardwriter.add_scalar("loss/test", test_loss, epoch)
+            tensorboardwriter.add_scalar("accuracy/train", train_acc, epoch)
+            tensorboardwriter.add_scalar("accuracy/test",test_acc, epoch)
+            #tensorboardwriter.add_scalar("accuracy/train", metrics["validation_accuracy"].value, epoch)
+            #tensorboardwriter.add_scalar("accuracy/test", metrics["validation_accuracy"].value, epoch)
         tensorboardwriter.close()
 
 
