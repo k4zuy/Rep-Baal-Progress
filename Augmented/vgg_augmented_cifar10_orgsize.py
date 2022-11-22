@@ -5,6 +5,7 @@ import csv
 from copy import deepcopy
 from time import time
 import datetime
+import numpy as np
 
 from tensorboardX import SummaryWriter
 import torch
@@ -150,7 +151,7 @@ def main():
             model.predict_on_dataset,
             heuristic,
             hyperparams.get("query_size", 1),
-            # save uncertainties into one or more files (not sure to be honest)
+            # save uncertainties into one file per epoch
             uncertainty_folder="results/uncertainties",
             batch_size=10,
             iterations=hyperparams["iterations"],
@@ -203,16 +204,37 @@ def main():
                     )
                 )
 
+            # replacement for step
+            pool = active_set.pool
+            if len(pool) > 0:
+                indices = np.arange(len(pool)) # array von 0 bis len(pool)-1
+                probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams["iterations"],use_cuda=use_cuda)
+                #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
+                # -> "isinstance(...) needed when using predict_..._Generator"
+                if probs is not None and len(probs) > 0:
+                    to_label, uncertainty = heuristic.get_ranks(probs) # to_label -> 
+                    to_label = indices[np.array(to_label)]
+                    if len(to_label) > 0:
+                        active_set.label(to_label[: hyperparams.get("query_size", 1)])
+                    else: break
+                else:
+                    break
+            else: 
+                break
+            
+            # suggested solution from baal-dev but works with the whole dataset and I think we should use the pool and have to translate the indices afterwards (like above in replacement for step)
+            #####
             predictions = model.predict_on_dataset(active_set._dataset,
                                                     hyperparams["batch_size"],
                                                     hyperparams["iterations"],
                                                     use_cuda) 
             uncertainty = BALD().get_uncertainties(predictions)
             oracle_indices = uncertainty.argsort()
+            #####
 
-            should_continue = active_loop.step()
-            if not should_continue:
-                break
+            #should_continue = active_loop.step()
+            #if not should_continue:
+            #    break
             
             test_acc = metrics["test_accuracy"].value
             train_acc = metrics["train_accuracy"].value
