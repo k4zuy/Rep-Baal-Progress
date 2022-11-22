@@ -24,6 +24,7 @@ from baal.active.active_loop import ActiveLearningLoop
 from baal.bayesian.dropout import patch_module
 from baal import ModelWrapper
 from baal.utils.metrics import Accuracy
+from baal.active.heuristics import BALD
 
 import aug_lib
 
@@ -169,6 +170,10 @@ def main():
         tensorboardwriter.add_custom_scalars(layout)
 
         for epoch in tqdm(range(args.epoch)):
+            # if we are in the last round we want to train for longer epochs to get a more comparable result
+            if epoch == args.epoch:
+                hyperparams["learning_epoch"] = 75
+            
             # Load the initial weights.
             model.load_state_dict(init_weights)
             model.train_on_dataset(
@@ -197,6 +202,13 @@ def main():
                         active_set.n_augmented_images_labelled
                     )
                 )
+
+            predictions = model.predict_on_dataset(active_set._dataset,
+                                                    hyperparams["batch_size"],
+                                                    hyperparams["iterations"],
+                                                    use_cuda) 
+            uncertainty = BALD().get_uncertainties(predictions)
+            oracle_indices = uncertainty.argsort()
 
             should_continue = active_loop.step()
             if not should_continue:
