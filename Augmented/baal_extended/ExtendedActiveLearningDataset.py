@@ -80,7 +80,7 @@ class ExtendedActiveLearningDataset(ActiveLearningDataset):
         data point that is labelled, and False for every data point that is not
         labelled."""
         orig_len = self.unaugmented_pool_size
-        print("orig len" + str(orig_len))
+        print("original dataset length: " + str(orig_len))
         print("augmented n times" + str(self.augmented_n_times))
         return np.concatenate(
             (

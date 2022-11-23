@@ -26,6 +26,7 @@ from baal.bayesian.dropout import patch_module
 from baal import ModelWrapper
 from baal.utils.metrics import Accuracy
 from baal.active.heuristics import BALD
+from baal.active.dataset import ActiveLearningDataset
 
 import aug_lib
 
@@ -207,13 +208,15 @@ def main():
             # replacement for step
             pool = active_set.pool
             if len(pool) > 0:
-                indices = np.arange(len(pool)) # array von 0 bis len(pool)-1
+                indices = np.arange(len(pool)) # array von 0 bis len(pool)-1 (nach initial label: 146999)
                 probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams["iterations"],use_cuda=use_cuda)
                 #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
                 # -> "isinstance(...) needed when using predict_..._Generator"
                 if probs is not None and len(probs) > 0:
-                    to_label, uncertainty = heuristic.get_ranks(probs) # to_label -> 
-                    to_label = indices[np.array(to_label)]
+                    to_label, uncertainty = heuristic.get_ranks(probs) 
+                    # to_label -> indices sortiert von größter zu niedrigster uncertainty
+                    # uncertainty -> alle uncertainties des pools 
+                    to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
                     if len(to_label) > 0:
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
