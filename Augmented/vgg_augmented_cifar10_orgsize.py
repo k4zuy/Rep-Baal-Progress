@@ -225,7 +225,7 @@ def main():
                                 n_chosen_augmented += 1
                             else:
                                 n_chosen_original += 1
-                            active_set.label(to_label[: hyperparams.get("query_size", 1)])
+                        active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
                 else:
                     break
