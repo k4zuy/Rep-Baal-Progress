@@ -200,8 +200,8 @@ def main():
                         0,
                         0,
                         active_set.n_labelled,
-                        active_set.n_unaugmented_images_labelled,
-                        active_set.n_augmented_images_labelled
+                        0,
+                        0
                     )
                 )
 
@@ -215,10 +215,17 @@ def main():
                 if probs is not None and len(probs) > 0:
                     to_label, uncertainty = heuristic.get_ranks(probs) 
                     # to_label -> indices sortiert von größter zu niedrigster uncertainty
-                    # uncertainty -> alle uncertainties des pools 
+                    # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
                     to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
                     if len(to_label) > 0:
-                        active_set.label(to_label[: hyperparams.get("query_size", 1)])
+                        n_chosen_original, n_chosen_augmented = 0
+                        for i in range(hyperparams.get("query_size")):
+                            img = active_set.pool[to_label[i]]
+                            if active_set.is_augmentation(img):
+                                n_chosen_augmented += 1
+                            else:
+                                n_chosen_original += 1
+                            active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
                 else:
                     break
@@ -227,12 +234,12 @@ def main():
             
             # suggested solution from baal-dev but works with the whole dataset and I think we should use the pool and have to translate the indices afterwards (like above in replacement for step)
             #####
-            predictions = model.predict_on_dataset(active_set._dataset,
-                                                    hyperparams["batch_size"],
-                                                    hyperparams["iterations"],
-                                                    use_cuda) 
-            uncertainty = BALD().get_uncertainties(predictions)
-            oracle_indices = uncertainty.argsort()
+            #predictions = model.predict_on_dataset(active_set._dataset,
+             #                                       hyperparams["batch_size"],
+              #                                      hyperparams["iterations"],
+               #                                     use_cuda) 
+            #uncertainty = BALD().get_uncertainties(predictions)
+            #oracle_indices = uncertainty.argsort()
             #####
 
             #should_continue = active_loop.step()
@@ -252,8 +259,8 @@ def main():
                 "test_loss": test_loss,
                 "train_loss": train_loss,
                 "Next training size": active_set.n_labelled,
-                "amount original images labelled": active_set.n_augmented_images_labelled,
-                "amount augmented images labelled": active_set.n_unaugmented_images_labelled,
+                "new original images labelled": n_chosen_original,
+                "new augmented images labelled": n_chosen_augmented,
             }
             pprint(logs)
 
