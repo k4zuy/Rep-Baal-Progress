@@ -171,6 +171,9 @@ def main():
         tensorboardwriter = SummaryWriter("results/tensorboard/tb-results" + dt_string + "/testrun")
         tensorboardwriter.add_custom_scalars(layout)
 
+        n_augmented_old = 0
+        n_original_old = 0
+
         for epoch in tqdm(range(args.epoch)):
             # if we are in the last round we want to train for longer epochs to get a more comparable result
             if epoch == args.epoch:
@@ -200,8 +203,8 @@ def main():
                         0,
                         0,
                         active_set.n_labelled,
-                        0,
-                        0
+                        active_set.n_unaugmented_images_labelled,
+                        active_set.n_augmented_images_labelled
                     )
                 )
 
@@ -218,13 +221,13 @@ def main():
                     # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
                     to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
                     if len(to_label) > 0:
-                        n_chosen_original, n_chosen_augmented = 0
-                        for i in range(hyperparams.get("query_size")):
-                            img = active_set.pool[to_label[i]]
-                            if active_set.is_augmentation(img):
-                                n_chosen_augmented += 1
-                            else:
-                                n_chosen_original += 1
+                       # n_chosen_original, n_chosen_augmented = 0
+                       # for i in range(hyperparams.get("query_size")):
+                       #     img = active_set.pool[to_label[i]]
+                       #     if active_set.is_augmentation(img):
+                       #         n_chosen_augmented += 1
+                       #     else:
+                       #         n_chosen_original += 1
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
                 else:
@@ -232,6 +235,9 @@ def main():
             else: 
                 break
             
+            n_augmented_old = active_set.n_augmented_images_labelled
+            n_original_old = active_set.n_unaugmented_images_labelled
+
             # suggested solution from baal-dev but works with the whole dataset and I think we should use the pool and have to translate the indices afterwards (like above in replacement for step)
             #####
             #predictions = model.predict_on_dataset(active_set._dataset,
@@ -259,8 +265,8 @@ def main():
                 "test_loss": test_loss,
                 "train_loss": train_loss,
                 "Next training size": active_set.n_labelled,
-                "new original images labelled": n_chosen_original,
-                "new augmented images labelled": n_chosen_augmented,
+                "new original images labelled": active_set.n_unaugmented_images_labelled - n_original_old,
+                "new augmented images labelled": active_set.n_augmented_images_labelled - n_augmented_old
             }
             pprint(logs)
 
