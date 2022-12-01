@@ -1,3 +1,12 @@
+# model: vgg16, pretrained with imgnet
+# dataset: cifar10 
+# augmanetations: 2
+# results: tensorboard, csv
+
+
+# strategy: uncertainties over all elements
+# labeling: all elements of one image  
+
 import argparse
 from pprint import pprint
 import random
