@@ -57,10 +57,11 @@ def parse_args():
     parser.add_argument("--iterations", default=20, type=int)
     parser.add_argument("--shuffle_prop", default=0.05, type=float)
     parser.add_argument("--learning_epoch", default=5, type=int)
+    parser.add_argument("--augmentations", default=2, type=int)
     return parser.parse_args()
 
 
-def get_datasets(initial_pool):
+def get_datasets(initial_pool,augmentations):
     transform = transforms.Compose(
         [
             # transforms.Resize((224, 224)),
@@ -98,7 +99,7 @@ def get_datasets(initial_pool):
     # active_set = ActiveLearningDataset(
     #    train_ds, pool_specifics={"transform": test_transform}
     # )
-    eald_set.augment_n_times(2, augmented_dataset=aug_train_ds)
+    eald_set.augment_n_times(augmentations, augmented_dataset=aug_train_ds)
     # We start labeling randomly.
     eald_set.label_randomly(initial_pool)
     return eald_set, test_set
@@ -131,7 +132,8 @@ def main():
 
         hyperparams = vars(args)
 
-        active_set, test_set = get_datasets(hyperparams["initial_pool"])
+        augmentations = hyperparams["augmentations"]
+        active_set, test_set = get_datasets(hyperparams["initial_pool"], augmentations)
 
         heuristic = get_heuristic(hyperparams["heuristic"], hyperparams["shuffle_prop"])
         criterion = CrossEntropyLoss()
@@ -217,6 +219,7 @@ def main():
                 )
 
             # replacement for step
+            orgset_len = len(active_set._dataset)/(augmentations+1)
             pool = active_set.pool
             if len(pool) > 0:
                 indices = np.arange(len(pool)) # array von 0 bis len(pool)-1 (nach initial label: 146999)
@@ -228,13 +231,48 @@ def main():
                     # to_label -> indices sortiert von größter zu niedrigster uncertainty
                     # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
                     to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
-                    if len(to_label) > 0:
-                       # 1. get all original images from to_label(whole pool sorted after uncertainties highest to lowest)
-                       # 2. get for each original image the ids of augmented children and all three uncertainties
-                       # 3. calculate the means
-                       # 4. sort those means after highest to lowest uncertainties 
-                       # 5. label images (all of one kind) after query value
-                       for id in to_label
+                    # 1. get all original images from to_label(whole pool sorted after uncertainties highest to lowest)
+                    # 2. get for each original image the ids of augmented children and all three uncertainties
+                    # 3. calculate the means
+                    # 4. sort those means after highest to lowest uncertainties 
+                    # 5. label images (all of one kind) after query value with pool indices
+                    trios = []
+                    oracle_idx = active_set._pool_to_oracle_index(to_label)
+                    for idx in oracle_idx:
+                        
+                        if idx == oracle_idx[0]:
+                            if idx in trios: 
+                                idx_processed = True
+                            else: 
+                                idx_processed = True
+                        else:
+                            for trio in trios:
+                                idx_processed = idx in trio
+                                if idx_processed: break
+
+                        if not idx_processed:
+                            if idx >= orgset_len and idx < len(active_set._dataset)-orgset_len:
+                                # img is first augmentation
+                                org = idx - orgset_len
+                                aug1 = idx
+                                aug2 = idx + orgset_len
+                            elif idx >= len(active_set._dataset)-orgset_len:
+                                # img is second augmentation
+                                org = idx - 2*orgset_len
+                                aug1 = idx - orgset_len
+                                aug2 = idx
+                            else:
+                                # img is original 
+                                org = idx
+                                aug1 = idx + orgset_len
+                                aug2 = idx + 2*orgset_len
+                            trio = (org, aug1, aug2)
+                            trios.append(trio)
+                    trio_uncertainties = []
+                    for trio in trios:
+                        for img in trio:
+                    
+                    if len(to_label) > 0:        
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
                 else:
