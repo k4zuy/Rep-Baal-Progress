@@ -237,9 +237,10 @@ def main():
                     # 4. sort those means after highest to lowest uncertainties 
                     # 5. label images (all of one kind) after query value with pool indices
                     trios = []
-                    oracle_idx = active_set._pool_to_oracle_index(to_label)
+                    oracle_idx = active_set._pool_to_oracle_index(indices)
                     for idx in oracle_idx:
                         
+                        # checks if img already in trios
                         if idx == oracle_idx[0]:
                             if idx in trios: 
                                 idx_processed = True
@@ -268,10 +269,14 @@ def main():
                                 aug2 = idx + 2*orgset_len
                             trio = (org, aug1, aug2)
                             trios.append(trio)
-                    trio_uncertainties = []
+                    trios_uncertainties = []
+                    trios_flattened = 
+                    pool_trios = active_set._oracle_to_pool(trios_flattened)
                     for trio in trios:
-                        for img in trio:
-                    
+                        u_org = uncertainty(trio[0]) # pool index needed
+                        u_aug1 = 
+                        u_aug2 = 
+                        trios_uncertainties.append(())
                     if len(to_label) > 0:        
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
