@@ -227,7 +227,7 @@ def main():
                 #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
                 # -> "isinstance(...) needed when using predict_..._Generator"
                 if probs is not None and len(probs) > 0:
-                    to_label, uncertainty = heuristic.get_ranks(probs) 
+                    to_label, uncertainties = heuristic.get_ranks(probs) 
                     # to_label -> indices sortiert von größter zu niedrigster uncertainty
                     # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
                     to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
@@ -267,16 +267,25 @@ def main():
                                 org = idx
                                 aug1 = idx + orgset_len
                                 aug2 = idx + 2*orgset_len
-                            trio = (org, aug1, aug2)
-                            trios.append(trio)
+                            #trio = (org, aug1, aug2)
+                            #trios.append(trio)
+                            trios.append(org)
+                            trios.append(aug1)
+                            trios.append(aug2)
                     trios_uncertainties = []
-                    trios_flattened = 
-                    pool_trios = active_set._oracle_to_pool(trios_flattened)
-                    for trio in trios:
-                        u_org = uncertainty(trio[0]) # pool index needed
-                        u_aug1 = 
-                        u_aug2 = 
-                        trios_uncertainties.append(())
+                    pool_trios = active_set._oracle_to_pool(trios)
+                    for img in trios:
+                        trios_uncertainties.append(uncertainties[pool_trios])
+                    trios_mean = []
+                    k = 0
+                    for i in range(len(trios_uncertainties)):
+                        if i % 3 == 0:
+                            if i != 0:
+                                mean = k/3
+                            else: 
+                                
+                        else:
+                            k += trios_uncertainties[i]
                     if len(to_label) > 0:        
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
