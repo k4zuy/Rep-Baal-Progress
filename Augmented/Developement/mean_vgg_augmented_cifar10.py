@@ -238,8 +238,7 @@ def main():
                     # 5. label images (all of one kind) after query value with pool indices
                     trios = []
                     oracle_idx = active_set._pool_to_oracle_index(indices)
-                    for idx in oracle_idx:
-                        
+                    for idx in oracle_idx:   
                         # checks if img already in trios
                         if idx == oracle_idx[0]:
                             if idx in trios: 
@@ -278,19 +277,20 @@ def main():
                         trios_uncertainties.append(uncertainties[pool_trios[i]])
                     trios_mean = []
                     k = 0
-                    # NEEDS TO GET CHECKED!!!
                     for i in range(len(trios_uncertainties)):
                         if i % 3 == 0:
                             if i != 0:
                                 mean = k/3
                                 trios_mean.append(mean)
-                                k = 0
+                                k = trios_uncertainties[i]
                             else: 
                                 k += trios_uncertainties[i]
                         else:
                             k += trios_uncertainties[i]
-
-                    if len(to_label) > 0:        
+                    
+                    #trios_mean = np.argsort(trios_mean)[::-1]
+                    
+                    if len(indices) > 0:        
                         active_set.label(to_label[: hyperparams.get("query_size", 1)])
                     else: break
                 else:
