@@ -132,8 +132,8 @@ def main():
 
         hyperparams = vars(args)
 
-        augmentations = hyperparams["augmentations"]
-        active_set, test_set = get_datasets(hyperparams["initial_pool"], augmentations)
+        n_augmentations = hyperparams["augmentations"]
+        active_set, test_set = get_datasets(hyperparams["initial_pool"], n_augmentations)
 
         heuristic = get_heuristic(hyperparams["heuristic"], hyperparams["shuffle_prop"])
         criterion = CrossEntropyLoss()
@@ -219,7 +219,7 @@ def main():
                 )
 
             # replacement for step
-            orgset_len = len(active_set._dataset)/(augmentations+1)
+            orgset_len = len(active_set._dataset)/(n_augmentations+1) # length of original dataset (dataset divided through amount augmentatios + 1)
             pool = active_set.pool
             if len(pool) > 0:
                 indices = np.arange(len(pool)) # array von 0 bis len(pool)-1 (nach initial label: 146999)
@@ -227,30 +227,20 @@ def main():
                 #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
                 # -> "isinstance(...) needed when using predict_..._Generator"
                 if probs is not None and len(probs) > 0:
-                    to_label, uncertainties = heuristic.get_ranks(probs) 
-                    # to_label -> indices sortiert von größter zu niedrigster uncertainty
-                    # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
-                    to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
+                    _, uncertainties = heuristic.get_ranks(probs) 
+                        # to_label -> indices sortiert von größter zu niedrigster uncertainty
+                        # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
+                        #to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
                     # 1. get all original images from to_label(whole pool sorted after uncertainties highest to lowest)
                     # 2. get for each original image the ids of augmented children and all three uncertainties
                     # 3. calculate the means
                     # 4. sort those means after highest to lowest uncertainties 
                     # 5. label images (all of one kind) after query value with pool indices
-                    trios = []
+                    trios_idx_global = []
                     oracle_idx = active_set._pool_to_oracle_index(indices)
                     for idx in oracle_idx:   
                         # checks if img already in trios
-                        if idx == oracle_idx[0]:
-                            if idx in trios: 
-                                idx_processed = True
-                            else: 
-                                idx_processed = True
-                        else:
-                            for trio in trios:
-                                idx_processed = idx in trio
-                                if idx_processed: break
-
-                        if not idx_processed:
+                        if idx not in trios_idx_global:
                             if idx >= orgset_len and idx < len(active_set._dataset)-orgset_len:
                                 # img is first augmentation
                                 org = idx - orgset_len
@@ -268,31 +258,32 @@ def main():
                                 aug2 = idx + 2*orgset_len
                             #trio = (org, aug1, aug2)
                             #trios.append(trio)
-                            trios.append(org)
-                            trios.append(aug1)
-                            trios.append(aug2)
+                            trios_idx_global.append(int(org))
+                            trios_idx_global.append(int(aug1))
+                            trios_idx_global.append(int(aug2))
                     trios_uncertainties = []
-                    pool_trios = active_set._oracle_to_pool(trios)
-                    for i in range(len(trios)):
+                    pool_trios = active_set._oracle_to_pool_index(trios_idx_global)
+                    for i in range(len(pool_trios)):
+                        # get the uncertainty of all image
                         trios_uncertainties.append(uncertainties[pool_trios[i]])
                     trios_mean = []
-                    k = 0
-                    for i in range(len(trios_uncertainties)):
-                        if i % 3 == 0:
-                            if i != 0:
-                                mean = k/3
-                                trios_mean.append(mean)
-                                k = trios_uncertainties[i]
-                            else: 
-                                k += trios_uncertainties[i]
+                    k = trios_uncertainties[0]
+                    assert len(trios_uncertainties) % 3 == 0, "trios_mean should be a multiple of augmentations + 1"
+                    for i in range(1,len(trios_uncertainties)):
+                        if (i+1) % 3 != 0:
+                            k += trios_uncertainties[i]
                         else:
                             k += trios_uncertainties[i]
-                    
-                    #trios_mean = np.argsort(trios_mean)[::-1]
-                    
-                    if len(indices) > 0:        
-                        active_set.label(to_label[: hyperparams.get("query_size", 1)])
-                    else: break
+                            mean = k/3
+                            trios_mean.append(mean)
+                            k = 0
+                    trios_idx_mean_sorted = np.argsort(trios_mean)[::-1]
+                    to_label = []
+                    for idx in trios_idx_mean_sorted:
+                        # org image will be chosen
+                        to_label.append(pool_trios[3*idx])
+                    # original and all augmentations will be labled
+                    active_set.label(to_label[: hyperparams.get("query_size", 1)])
                 else:
                     break
             else: 
