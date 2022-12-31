@@ -48,16 +48,17 @@ Minimal example to use BaaL.
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epoch", default=50, type=int)
+    parser.add_argument("--epoch", default=100, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--initial_pool", default=1000, type=int)
-    parser.add_argument("--query_size", default=50, type=int)
+    parser.add_argument("--query_size", default=100, type=int)
     parser.add_argument("--lr", default=0.001)
     parser.add_argument("--heuristic", default="bald", type=str)
     parser.add_argument("--iterations", default=20, type=int)
     parser.add_argument("--shuffle_prop", default=0.05, type=float)
-    parser.add_argument("--learning_epoch", default=5, type=int)
+    parser.add_argument("--learning_epoch", default=20, type=int)
     parser.add_argument("--augmentations", default=2, type=int)
+    parser.add_argument("--tag", default="notag", type=str)
     return parser.parse_args()
 
 
@@ -106,6 +107,7 @@ def get_datasets(initial_pool,augmentations):
 
 def main():
     args = parse_args()
+    tag = hyperparams["tag"]
     use_cuda = torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
     random.seed(1337)
@@ -115,7 +117,7 @@ def main():
 
     now = datetime.datetime.now()
     dt_string = now.strftime("%d_%m_%Y_%Hx%M")
-    with open("results/csv/metrics_cifarnet_" + dt_string + "_.csv", "w+", newline="") as out_file:
+    with open("results/csv/metrics_cifarnet_" + dt_string + tag + "_.csv", "w+", newline="") as out_file:
         csvwriter = csv.writer(out_file)
         csvwriter.writerow(
             (
@@ -178,7 +180,7 @@ def main():
                 },
         }
 
-        tensorboardwriter = SummaryWriter("results/tensorboard/tb-results" + dt_string + "/testrun")
+        tensorboardwriter = SummaryWriter("results/tensorboard/tb-results" + dt_string + "/" + tag)
         tensorboardwriter.add_custom_scalars(layout)
 
         n_augmented_old = 0
@@ -219,15 +221,17 @@ def main():
                 )
 
             # replacement for step
-            orgset_len = len(active_set._dataset)/(n_augmentations+1) # length of original dataset (dataset divided through amount augmentatios + 1)
+            orgset_len = int(len(active_set._dataset)/(3)) # length of original dataset (dataset divided through amount augmentatios + 1)
+            print("orgset_len: " + str(orgset_len))
             pool = active_set.pool
             if len(pool) > 0:
                 indices = np.arange(len(pool)) # array von 0 bis len(pool)-1 (nach initial label: 146999)
-                probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams["iterations"],use_cuda=use_cuda)
+                probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams.iterations,use_cuda=use_cuda)
                 #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
                 # -> "isinstance(...) needed when using predict_..._Generator"
                 if probs is not None and len(probs) > 0:
-                    _, uncertainties = heuristic.get_ranks(probs) 
+                    #to_label, uncertainties = heuristic.get_ranks(probs) 
+                    uncertainties = heuristic.get_uncertainties(probs)
                         # to_label -> indices sortiert von größter zu niedrigster uncertainty
                         # uncertainty -> alle uncertainties des pools in Reihenfolge wie pool vorliegt
                         #to_label = indices[np.array(to_label)] # was hier passiert keine Ahnung aber to_label bleibt gleich also unnütze Zeile?
@@ -236,11 +240,11 @@ def main():
                     # 3. calculate the means
                     # 4. sort those means after highest to lowest uncertainties 
                     # 5. label images (all of one kind) after query value with pool indices
-                    trios_idx_global = []
+                    trios = []
                     oracle_idx = active_set._pool_to_oracle_index(indices)
                     for idx in oracle_idx:   
                         # checks if img already in trios
-                        if idx not in trios_idx_global:
+                        if idx not in trios:
                             if idx >= orgset_len and idx < len(active_set._dataset)-orgset_len:
                                 # img is first augmentation
                                 org = idx - orgset_len
@@ -256,15 +260,14 @@ def main():
                                 org = idx
                                 aug1 = idx + orgset_len
                                 aug2 = idx + 2*orgset_len
-                            #trio = (org, aug1, aug2)
-                            #trios.append(trio)
-                            trios_idx_global.append(int(org))
-                            trios_idx_global.append(int(aug1))
-                            trios_idx_global.append(int(aug2))
+
+                            trios.append(int(org))
+                            trios.append(int(aug1))
+                            trios.append(int(aug2))
                     trios_uncertainties = []
-                    pool_trios = active_set._oracle_to_pool_index(trios_idx_global)
+                    pool_trios = active_set._oracle_to_pool_index(trios)
                     for i in range(len(pool_trios)):
-                        # get the uncertainty of all image
+                        # get the uncertainty of all images
                         trios_uncertainties.append(uncertainties[pool_trios[i]])
                     trios_mean = []
                     k = trios_uncertainties[0]
@@ -283,7 +286,8 @@ def main():
                         # org image will be chosen
                         to_label.append(pool_trios[3*idx])
                     # original and all augmentations will be labled
-                    active_set.label(to_label[: hyperparams.get("query_size", 1)])
+
+                # active_set.label(to_label[: hyperparams.query_size])
                 else:
                     break
             else: 
@@ -292,25 +296,10 @@ def main():
             n_augmented_old = active_set.n_augmented_images_labelled
             n_original_old = active_set.n_unaugmented_images_labelled
 
-            # suggested solution from baal-dev but works with the whole dataset and I think we should use the pool and have to translate the indices afterwards (like above in replacement for step)
-            #####
-            #predictions = model.predict_on_dataset(active_set._dataset,
-             #                                       hyperparams["batch_size"],
-              #                                      hyperparams["iterations"],
-               #                                     use_cuda) 
-            #uncertainty = BALD().get_uncertainties(predictions)
-            #oracle_indices = uncertainty.argsort()
-            #####
-
-            #should_continue = active_loop.step()
-            #if not should_continue:
-            #    break
-            
             test_acc = metrics["test_accuracy"].value
             train_acc = metrics["train_accuracy"].value
             test_loss = metrics["test_loss"].value
             train_loss = metrics["train_loss"].value 
-
 
             logs = {
                 "epoch": epoch,
@@ -341,8 +330,6 @@ def main():
             tensorboardwriter.add_scalar("loss/test", test_loss, epoch)
             tensorboardwriter.add_scalar("accuracy/train", train_acc, epoch)
             tensorboardwriter.add_scalar("accuracy/test",test_acc, epoch)
-            #tensorboardwriter.add_scalar("accuracy/train", metrics["validation_accuracy"].value, epoch)
-            #tensorboardwriter.add_scalar("accuracy/test", metrics["validation_accuracy"].value, epoch)
         tensorboardwriter.close()
 
 
