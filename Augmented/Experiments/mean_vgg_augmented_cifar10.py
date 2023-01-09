@@ -107,6 +107,7 @@ def get_datasets(initial_pool,augmentations):
 
 def main():
     args = parse_args()
+    hyperparams = vars(args)
     tag = hyperparams["tag"]
     use_cuda = torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
@@ -117,7 +118,7 @@ def main():
 
     now = datetime.datetime.now()
     dt_string = now.strftime("%d_%m_%Y_%Hx%M")
-    with open("results/csv/metrics_cifarnet_" + dt_string + tag + "_.csv", "w+", newline="") as out_file:
+    with open("results/csv/metrics_cifarnet_" + dt_string + "_" + tag + "_.csv", "w+", newline="") as out_file:
         csvwriter = csv.writer(out_file)
         csvwriter.writerow(
             (
@@ -131,8 +132,6 @@ def main():
                 "amount augmented images labelled"
             )
         )
-
-        hyperparams = vars(args)
 
         n_augmentations = hyperparams["augmentations"]
         active_set, test_set = get_datasets(hyperparams["initial_pool"], n_augmentations)
@@ -159,17 +158,17 @@ def main():
 
         # for prediction we use a smaller batchsize
         # since it is slower
-        active_loop = ActiveLearningLoop(
-            active_set,
-            model.predict_on_dataset,
-            heuristic,
-            hyperparams.get("query_size", 1),
-            # save uncertainties into one file per epoch
-            uncertainty_folder="results/uncertainties",
-            batch_size=10,
-            iterations=hyperparams["iterations"],
-            use_cuda=use_cuda,
-        )
+        #active_loop = ActiveLearningLoop(
+         #   active_set,
+         #   model.predict_on_dataset,
+         #   heuristic,
+         #   hyperparams.get("query_size", 1),
+         #   # save uncertainties into one file per epoch
+         #   #uncertainty_folder="results/uncertainties",
+         #   batch_size=10,
+         #   iterations=hyperparams["iterations"],
+         #   use_cuda=use_cuda,
+        #)
         # We will reset the weights at each active learning step.
         init_weights = deepcopy(model.state_dict())
 
@@ -188,7 +187,7 @@ def main():
 
         for epoch in tqdm(range(args.epoch)):
             # if we are in the last round we want to train for longer epochs to get a more comparable result
-            if epoch == args.epoch:
+            if epoch == (args.epoch - 1):
                 hyperparams["learning_epoch"] = 75
             
             # Load the initial weights.
@@ -226,7 +225,7 @@ def main():
             pool = active_set.pool
             if len(pool) > 0:
                 indices = np.arange(len(pool)) # array von 0 bis len(pool)-1 (nach initial label: 146999)
-                probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams.iterations,use_cuda=use_cuda)
+                probs = model.predict_on_dataset(pool,batch_size=10,iterations=hyperparams["iterations"],use_cuda=use_cuda)
                 #if probs is not None and (isinstance(probs, types.GeneratorType) or len(probs) > 0):
                 # -> "isinstance(...) needed when using predict_..._Generator"
                 if probs is not None and len(probs) > 0:
@@ -286,8 +285,7 @@ def main():
                         # org image will be chosen
                         to_label.append(pool_trios[3*idx])
                     # original and all augmentations will be labled
-
-                # active_set.label(to_label[: hyperparams.query_size])
+                    active_set.label(to_label[: hyperparams["query_size"]])
                 else:
                     break
             else: 
