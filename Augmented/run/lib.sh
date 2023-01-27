@@ -18,10 +18,8 @@ create_new_environment() {
 }
 
 remove_new_environment(){
-    SLURM_JOB_ID=$1
-    COMPUTE_WS_NAME=pyjob_$SLURM_JOB_ID
     deactivate
-    ws_release -F ssd $COMPUTE_WS_NAME
+    ws_release -F ssd $1
 }
 
 create_or_reuse_environment() {

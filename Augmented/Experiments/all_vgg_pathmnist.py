@@ -275,7 +275,7 @@ def main():
             tensorboardwriter.add_scalar("accuracy/train", train_acc, epoch)
             tensorboardwriter.add_scalar("accuracy/test",test_acc, epoch)
         tensorboardwriter.close()
-
+    
 
 if __name__ == "__main__":
     main()

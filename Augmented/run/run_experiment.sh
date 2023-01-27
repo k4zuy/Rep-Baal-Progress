@@ -21,4 +21,4 @@ create_or_reuse_environment $SLURM_JOB_NAME
 
 cd /home/keki996e/AL4ML/ACTIVE/OwnExperiments/Rep-Baal-Progress/Augmented/Experiments
 
-python mean_serhyi_vgg_augmented_cifar10.py --tag mean_serhyi_cifar10
+python all_vgg_augmented_cifar10.py --tag mean_serhyi_cifar10
